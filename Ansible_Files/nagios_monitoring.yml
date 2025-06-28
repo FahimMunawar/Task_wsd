@@ -1,0 +1,81 @@
+---
+- name: Deploy Nagios monitoring configuration
+  hosts: nagios_server
+  become: true
+  vars:
+    nagios_config_dir: /etc/nagios4/conf.d
+    monitored_hosts:
+      - { hostname: "app-vm1.fra1.internal", ip: "192.168.0.2" }
+      - { hostname: "db-vm1.fra1.db", ip: "192.168.0.3" }
+      - { hostname: "web-vm1.fra1.web", ip: "192.168.0.4" }
+  
+  tasks:
+    - name: Deploy host definitions
+      copy:
+        dest: "{{ nagios_config_dir }}/hosts.cfg"
+        content: |
+          {% for host in monitored_hosts %}
+          define host {
+              host_name               {{ host.hostname }}
+              alias                   {{ host.hostname }}
+              address                 {{ host.ip }}
+              check_command           check-host-alive
+              max_check_attempts      3
+              check_period            24x7
+              notification_interval   0
+              notification_period     24x7
+          }
+          
+          {% endfor %}
+        owner: nagios
+        group: nagios
+        mode: '0644'
+      notify: restart nagios
+
+    - name: Deploy service definitions
+      copy:
+        dest: "{{ nagios_config_dir }}/services.cfg"
+        content: |
+          {% for host in monitored_hosts %}
+          define service {
+              service_description     NTP Check
+              host_name               {{ host.hostname }}
+              check_command           check_ntp_time
+              check_interval          10
+              retry_interval          5
+              max_check_attempts      3
+              check_period            24x7
+              notification_interval   0
+              notification_period     24x7
+          }
+          
+          {% endfor %}
+        owner: nagios
+        group: nagios
+        mode: '0644'
+      notify: restart nagios
+
+    - name: Deploy command definitions
+      copy:
+        dest: "{{ nagios_config_dir }}/commands.cfg"
+        content: |
+          define command {
+              command_name    check_ntp_time
+              command_line    $USER1$/check_ntp_time -H $HOSTADDRESS$ -w 1 -c 5
+          }
+        owner: nagios
+        group: nagios
+        mode: '0644'
+      notify: restart nagios
+
+    - name: Verify Nagios configuration
+      command: /usr/sbin/nagios4 -v /etc/nagios4/nagios.cfg
+      register: nagios_config_check
+      changed_when: false
+      failed_when: nagios_config_check.rc != 0
+
+  handlers:
+    - name: restart nagios
+      service:
+        name: nagios4
+        state: restarted

@@ -1,0 +1,35 @@
+- name: Install and configure NTPD
+  hosts: ntp_servers
+  become: true
+  tasks:
+    - name: Install ntp package
+      apt:
+        name: ntp
+        state: present
+        update_cache: true
+
+    - name: Deploy custom ntp.conf
+      copy:
+        dest: /etc/ntp.conf
+        content: |
+          tinker panic 0
+          restrict default kod nomodify notrap nopeer noquery
+          restrict -6 default kod nomodify notrap nopeer noquery
+          restrict 127.0.0.1
+          restrict -6 ::1
+          server   192.168.0.252 minpoll 4 maxpoll 8
+          server   192.168.0.251 minpoll 4 maxpoll 8
+          server   192.168.0.0 # local clock
+          fudge    192.168.0.0 stratum 10
+          driftfile /var/lib/ntp/drift
+          keys     /etc/ntp/keys
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+
+    - name: Restart ntp service
+      service:
+        name: ntp
+        state: restarted
+        enabled: true
