@@ -1,0 +1,253 @@
+Name:             customer-abc-elasticsearch-1
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             aks-system-10818488-vmss000000/10.23.0.5
+Start Time:       Sun, 29 Jun 2025 02:28:20 +0600
+Labels:           app=customer-abc-elasticsearch
+                  apps.kubernetes.io/pod-index=1
+                  controller-revision-hash=customer-abc-elasticsearch-59d8bf9dd4
+                  statefulset.kubernetes.io/pod-name=customer-abc-elasticsearch-1
+Annotations:      <none>
+Status:           Running
+IP:               10.23.1.85
+IPs:
+  IP:           10.23.1.85
+Controlled By:  StatefulSet/customer-abc-elasticsearch
+Init Containers:
+  configure-sysctl:
+    Container ID:  containerd://7a895d95f2e22eb0125be9b3a8643ada81b42478681f8f2c80b3120cd85f62fa
+    Image:         elasticsearch:7.17.3
+    Image ID:      docker.io/library/elasticsearch@sha256:5e6ac15bf6a57c42fa702a647c13749b1249c89e59be8f654f61a3feade9dc47
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      sysctl
+      -w
+      vm.max_map_count=262144
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Sun, 29 Jun 2025 02:28:25 +0600
+      Finished:     Sun, 29 Jun 2025 02:28:25 +0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     25m
+      memory:  128Mi
+    Requests:
+      cpu:        25m
+      memory:     128Mi
+    Environment:  <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hwz4z (ro)
+Containers:
+  elasticsearch:
+    Container ID:   containerd://9a8e37fe045f5e9fdb9ed431c044ff1ad9f0199619c96782e1a4103be00e4af2
+    Image:          elasticsearch:7.17.3
+    Image ID:       docker.io/library/elasticsearch@sha256:5e6ac15bf6a57c42fa702a647c13749b1249c89e59be8f654f61a3feade9dc47
+    Ports:          9200/TCP, 9300/TCP
+    Host Ports:     0/TCP, 0/TCP
+    State:          Running
+      Started:      Sun, 29 Jun 2025 02:28:26 +0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     1
+      memory:  2Gi
+    Requests:
+      cpu:      200m
+      memory:   1Gi
+    Readiness:  exec [bash -c set -e
+# If the node is starting up wait for the cluster to be ready (request params: "wait_for_status=green&timeout=1s" )
+# Once it has started only check that the node itself is responding
+START_FILE=/tmp/.es_start_file
+
+# Disable nss cache to avoid filling dentry cache when calling curl
+# This is required with Elasticsearch Docker using nss < 3.52
+export NSS_SDB_USE_CACHE=no
+
+http () {
+  local path="${1}"
+  local args="${2}"
+  set -- -XGET -s
+
+  if [ "$args" != "" ]; then
+    set -- "$@" $args
+  fi
+
+  if [ -n "${ELASTIC_PASSWORD}" ]; then
+    set -- "$@" -u "elastic:${ELASTIC_PASSWORD}"
+  fi
+
+  curl --output /dev/null -k "$@" "http://127.0.0.1:9200${path}"
+}
+
+if [ -f "${START_FILE}" ]; then
+  echo 'Elasticsearch is already running, lets check the node is healthy'
+  HTTP_CODE=$(http "/" "-w %{http_code}")
+  RC=$?
+  if [[ ${RC} -ne 0 ]]; then
+    echo "curl --output /dev/null -k -XGET -s -w '%{http_code}' \${BASIC_AUTH} http://127.0.0.1:9200/ failed with RC ${RC}"
+    exit ${RC}
+  fi
+  # ready if HTTP code 200, 503 is tolerable if ES version is 6.x
+  if [[ ${HTTP_CODE} == "200" ]]; then
+    exit 0
+  elif [[ ${HTTP_CODE} == "503" && "7" == "6" ]]; then
+    exit 0
+  else
+    echo "curl --output /dev/null -k -XGET -s -w '%{http_code}' \${BASIC_AUTH} http://127.0.0.1:9200/ failed with HTTP code ${HTTP_CODE}"
+    exit 1
+  fi
+
+else
+  echo 'Waiting for elasticsearch cluster to become ready (request params: "wait_for_status=green&timeout=1s" )'
+  if http "/_cluster/health?wait_for_status=green&timeout=1s" "--fail" ; then
+    touch ${START_FILE}
+    exit 0
+  else
+    echo 'Cluster is not yet ready (request params: "wait_for_status=green&timeout=1s" )'
+    exit 1
+  fi
+fi
+] delay=120s timeout=5s period=10s #success=3 #failure=3
+    Environment:
+      node.name:                             customer-abc-elasticsearch-1 (v1:metadata.name)
+      cluster.initial_master_nodes:          customer-abc-elasticsearch-0,customer-abc-elasticsearch-1,customer-abc-elasticsearch-2,
+      discovery.seed_hosts:                  customer-abc-elasticsearch-headless
+      cluster.name:                          customer-abc-elasticsearch
+      network.host:                          0.0.0.0
+      cluster.deprecation_indexing.enabled:  false
+      ES_JAVA_OPTS:                          -Xmx1g -Xms1g
+      node.data:                             true
+      node.ingest:                           true
+      node.master:                           true
+      node.ml:                               true
+      node.remote_cluster_client:            true
+    Mounts:
+      /usr/share/elasticsearch/data from customer-abc-elasticsearch (rw)
+      /usr/share/elasticsearch/logs from elasticsearch-log (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hwz4z (ro)
+  elasticsearch-exporter:
+    Container ID:   containerd://08162ebbca5b3ecd938c057338b3fe2921549447fa1f472bd2bf61812da64b12
+    Image:          bitnami/elasticsearch-exporter:latest
+    Image ID:       docker.io/bitnami/elasticsearch-exporter@sha256:fec09c53672c89ff449121f282dadea683913435a9b6d60676bf3fd16ded0d6b
+    Port:           9114/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Sun, 29 Jun 2025 02:28:26 +0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     100m
+      memory:  128Mi
+    Requests:
+      cpu:     100m
+      memory:  128Mi
+    Environment:
+      ES_URI:  <set to the key 'esURI' in secret 'es-secret'>  Optional: false
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hwz4z (ro)
+  elasticsearch-logrotate:
+    Container ID:   containerd://cc9662e2468a5f90f4a8df088e21df8672e5ea2eea5e947670dcfd8d3476e40c
+    Image:          blacklabelops/logrotate:1.3
+    Image ID:       docker.io/blacklabelops/logrotate@sha256:7738861d24fce052530d7b793c339533d3ae29651d5638fc223ae7ea40ffec5c
+    Port:           <none>
+    Host Port:      <none>
+    State:          Running
+      Started:      Sun, 29 Jun 2025 02:28:27 +0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     50m
+      memory:  200Mi
+    Requests:
+      cpu:     50m
+      memory:  200Mi
+    Environment:
+      LOGS_DIRECTORIES:              /usr/share/elasticsearch/logs
+      LOGROTATE_INTERVAL:            hourly
+      LOGROTATE_COPIES:              1
+      LOGROTATE_POSTROTATE_COMMAND:  pkill -SIGUSR1 elasticsearch >/dev/null 2>&1
+      LOGROTATE_SIZE:                10M
+    Mounts:
+      /usr/share/elasticsearch/logs/ from elasticsearch-log (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hwz4z (ro)
+  elasticsearch-fluentd:
+    Container ID:  containerd://4a4542454a30d4e5ce05d4f64fa10a8af3f49287481db39466b222c7bc00f1d3
+    Image:         fluent/fluentd:v1.14.3-debian-1.0
+    Image ID:      docker.io/fluent/fluentd@sha256:c1e52b568a219e173811dee96cef8d7a80c9b737350f497729afb7948d84fbb5
+    Port:          <none>
+    Host Port:     <none>
+    Args:
+      -c
+      /etc/fluentd-config/fluentd.conf
+    State:          Running
+      Started:      Sun, 29 Jun 2025 02:28:28 +0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     100m
+      memory:  149Mi
+    Requests:
+      cpu:     10m
+      memory:  149Mi
+    Environment:
+      TINI_SUBREAPER:  
+    Mounts:
+      /etc/fluentd-config/fluentd.conf from config-volume (rw,path="fluentd.conf")
+      /usr/share/elasticsearch/logs/ from elasticsearch-log (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hwz4z (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  customer-abc-elasticsearch:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  customer-abc-elasticsearch-customer-abc-elasticsearch-1
+    ReadOnly:   false
+  elasticsearch-log:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  config-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      elasticsearch-fluentd-config
+    Optional:  false
+  kube-api-access-hwz4z:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/memory-pressure:NoSchedule op=Exists
+                             node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  13m   default-scheduler  Successfully assigned default/customer-abc-elasticsearch-1 to aks-system-10818488-vmss000000
+  Normal  Pulled     13m   kubelet            Container image "elasticsearch:7.17.3" already present on machine
+  Normal  Created    13m   kubelet            Created container: configure-sysctl
+  Normal  Started    13m   kubelet            Started container configure-sysctl
+  Normal  Pulled     13m   kubelet            Container image "elasticsearch:7.17.3" already present on machine
+  Normal  Created    13m   kubelet            Created container: elasticsearch
+  Normal  Started    13m   kubelet            Started container elasticsearch
+  Normal  Pulled     13m   kubelet            Container image "bitnami/elasticsearch-exporter:latest" already present on machine
+  Normal  Created    13m   kubelet            Created container: elasticsearch-exporter
+  Normal  Started    13m   kubelet            Started container elasticsearch-exporter
+  Normal  Pulling    13m   kubelet            Pulling image "blacklabelops/logrotate:1.3"
+  Normal  Pulled     13m   kubelet            Successfully pulled image "blacklabelops/logrotate:1.3" in 781ms (781ms including waiting). Image size: 16302490 bytes.
+  Normal  Created    13m   kubelet            Created container: elasticsearch-logrotate
+  Normal  Started    13m   kubelet            Started container elasticsearch-logrotate
+  Normal  Pulling    13m   kubelet            Pulling image "fluent/fluentd:v1.14.3-debian-1.0"
+  Normal  Pulled     13m   kubelet            Successfully pulled image "fluent/fluentd:v1.14.3-debian-1.0" in 741ms (741ms including waiting). Image size: 83258311 bytes.
+  Normal  Created    13m   kubelet            Created container: elasticsearch-fluentd
+  Normal  Started    13m   kubelet            Started container elasticsearch-fluentd
